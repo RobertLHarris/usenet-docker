@@ -1,167 +1,336 @@
-version: '2'
 services:
-    nginx-proxy:
-        image: jwilder/nginx-proxy:latest
-        container_name: nginx-proxy
-        volumes:
-            - /var/run/docker.sock:/tmp/docker.sock:ro
-        ports:
-            - 80:80
-        restart: always
-
-    sabnzbd:
-        image: linuxserver/sabnzbd:latest
-        container_name: sabnzbd
-        volumes:
-            - /data_directory_path/config/sabnzbd:/config
-            - /data_directory_path/Downloads/complete:/downloads
-            - /data_directory_path/Downloads/incomplete:/incomplete-downloads
-        ports:
-            - 8080:8080
-        env_file: uidgid.env
+#version: '3'
+    openvpn:
+        image: ventz/openvpn
+        #build: openvpn/
+        container_name: openvpn
+        cap_add:
+            - NET_ADMIN
+        env_file: 
+            - uidgid.env
+        networks:
+            - proxy
         environment:
-            - EDGE=1
-            - VIRTUAL_HOST=sabnzbd.HOSTNAME.com
-            - VIRTUAL_PORT=8080
-        restart: always
-
-    couchpotato:
-        image: linuxserver/couchpotato:latest
-        container_name: couchpotato
+            - FILE__PASSWORD=/etc/openvpn/creds.txt
+            - INTERFACE=enp0s31f6
+        dns:
+            - 172.20.0.1
+            - 1.1.1.1
+            - 8.8.8.8
+            - 8.8.4.4
+        devices:
+            - "/dev/net/tun:/dev/net/tun"
+        #privileged: true
+        tty: true
         volumes:
-            - /data_directory_path/config/couchpotato:/config
-            - /data_directory_path/Downloads/complete:/downloads
-            - /data_directory_path/Movies:/movies
-        ports:
-            - 5050:5050
-        env_file: uidgid.env
-        environment:
-            - VIRTUAL_HOST=couchpotato.HOSTNAME.com
-            - VIRTUAL_PORT=5050
-        restart: always
+            - "/root/MediaRage/OpenVPN/data:/data"
+            # Auth File VyprVPN.txt
+            - "/root/MediaRage/OpenVPN/etc:/etc/openvpn"
+            #
+            # Support files
+            - "/root/MediaRage/OpenVPN/logs:/var/log"
+            - "/var/run/docker.sock:/var/run/docker.sock"
+            - "/etc/localtime:/etc/localtime:ro"
+        restart: unless-stopped
+# Plex
+#- ...
+# TDarr
+#- 8265:8265
+#- 8266:8266
+# Sonarr
+#- 8989:8989
+# Radarr
+#- 7878:7878
+# Sabnzbd
+#- 8080:8080
+#- 9898:9898
+# Transmission
+#- 9091:9091
+#- 51413:51413
+#- 51413:51413/udp
+# Prowlarr
+#- 9696:9696
+# Bazarr
+#- 6767
 
+    # Plex Media Server
     plex:
-        image: linuxserver/plex
+        #
+        # https://hub.docker.com/r/plexinc/pms-docker/tags/
+        #
+        image: plexinc/pms-docker:latest
+        #image: plexinc/pms-docker:1.41.8.9834-071366d65
+        #image: plexinc/pms-docker:1.41.7.9823-59f304c16
+        #image: plexinc/pms-docker:1.41.6.9685-d301f511a
+        #image: plexinc/pms-docker:1.41.2.9200-c6bbc1b53
         container_name: plex
-        volumes:
-            - /data_directory_path/config/plex:/config
-            - /data_directory_path/TV:/data/tvshows
-            - /data_directory_path/Movies:/data/movies
+        restart: unless-stopped
         ports:
-            - 32469:32469
-            - 32400:32400
-            - 32401:32401
-            - 3005:3005
-            - 8324:8324
             - 1900:1900/udp
+            - 5353:5353/udp
+            #- 6767:6767/tcp
+            - 8324:8324/tcp
+            - 32400:32400/tcp
             - 32410:32410/udp
             - 32412:32412/udp
             - 32413:32413/udp
             - 32414:32414/udp
-        env_file: uidgid.env
+            - 32469:32469/tcp
+            - 33400:33400/udp
+        env_file: 
+            - uidgid.env
         environment:
-            - VIRTUAL_HOST=plex.HOSTNAME.com
-            - VIRTUAL_PORT=32400
-        restart: always
+            - PLEX_CLAIM=claim-oMy46_DUReCbuLQyztPy
+            - ADVERTISE_IP=http://salamander.rdlg.net:32400/
+            #- ADVERTISE_IP=http://plex.rdlg.net:32400/
+        hostname: salamander.rdlg.net
+        volumes:
+            - /root/MediaRage/Plex/config:/config
+            # Media Directories
+            - /mnt/data01/Television:/Television
+            - /mnt/data02/Anime:/Anime
+            - /mnt/data02/Movies:/Movies
+            - /mnt/data02/Private:/Private
+        devices:
+            - /dev/dri:/dev/dri #optional
 
+    jellyfin:
+    image: jellyfin/jellyfin
+    container_name: jellyfin
+    # Optional - specify the uid and gid you would like Jellyfin to use instead of root
+    user: uid:gid
+    ports:
+      - 8096:8096/tcp
+      - 7359:7359/udp
+    volumes:
+      - /root/MediaRage/Jellyfin/config:/config
+      - /root/MediaRage/Jellyfin/cache:/cache
+      - type: bind
+        source: /mnt/data01/Television
+        target: /Television
+      - type: bind
+        source: /mnt/data02/Anime
+        target: /Anime
+        read_only: true
+      - type: bind
+        source: /mnt/data02/Movies
+        target: /Movies
+        read_only: true
+      - type: bind
+        source: /mnt/data02/Private
+        target: /Private
+        read_only: true
+      # Optional - extra fonts to be used during transcoding with subtitle burn-in
+      #- type: bind
+      #  source: /path/to/fonts
+      #  target: /usr/local/share/fonts/custom
+      #  read_only: true
+    restart: 'unless-stopped'
+    # Optional - alternative address used for autodiscovery
+    environment:
+      - JELLYFIN_PublishedServerUrl=http://jellyfin.rdlg.net
+    # Optional - may be necessary for docker healthcheck to pass if running in host network mode
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+
+    # Nginx Proxy manager
+    npm:
+        image: 'jc21/nginx-proxy-manager:latest'
+        #image: 'jc21/nginx-proxy-manager:2.11.2'
+        container_name: npm
+        depends_on:
+            - openvpn
+        ports:
+            - 80:80
+            - 81:81
+            - 443:443
+        env_file: 
+            - uidgid.env
+        networks:
+            - proxy
+        environment:
+            - VIRTUAL_HOST="helheim.rdlg.net"
+            - VIRTUAL_PORT="443"
+        volumes:
+            # Moved config to /root for performance
+            - /root/MediaRage/npm/config:/config
+            #- /root/MediaRage/npm/nconfig:/etc/nginx/conf.d/
+            - /root/MediaRage/npm/Data:/data
+            # Certificates
+            - /mnt/data02/Certs/certbot/conf/:/etc/letsencrypt/
+            - /mnt/data02/Certs/certbot/www/:/var/www/certbot/
+            # Support files
+            - /root/MediaRage/npm/logs:/var/log
+            - /var/run/docker.sock:/var/run/docker.sock
+            - /etc/localtime:/etc/localtime:ro
+        restart: unless-stopped
+
+    #watchtower:
+    #    image: containrrr/watchtower
+    #    container_name: watchtower
+    #    env_file: 
+    #        - uidgid.env
+    #    volumes:
+    #        - /var/run/docker.sock:/var/run/docker.sock
+    #        - /root/MediaRage/WatchTower/config.json:/config.json
+    #        - /etc/localtime:/etc/localtime:ro
+    #    command: --interval 3600
+
+
+    # Sonarr
     sonarr:
         image: linuxserver/sonarr
         container_name: sonarr
+        privileged: true
+        depends_on:
+            - sabnzbd
+        env_file: 
+            - uidgid.env
+        network_mode: service:openvpn
+        #ports:
+        #    - '8989:8989'
         volumes:
-            - /data_directory_path/config/sonarr:/config
+            # Moved to /root for performance
+            - /root/MediaRage/sonarr:/config
+            # Media Directories
+            - /mnt/data01/Television:/Television
+            - /mnt/data02/Anime:/Anime
+            - /mnt/data02/Private_Shows:/Private_Shows
+            # Source Directories
+            - /mnt/data02/Downloads:/Downloads
+            # Support files
+            - /root/MediaRage/sonarr/logs:/var/log
+            - /var/run/docker.sock:/var/run/docker.sock
             - /etc/localtime:/etc/localtime:ro
-            - /data_directory_path/TV:/tv
-            - /data_directory_path/Downloads/complete:/downloads
-        ports:
-            - 8989:8989
-        env_file: uidgid.env
-        environment:
-            - VIRTUAL_HOST=sonarr.HOSTNAME.com
-            - VIRTUAL_PORT=8989
-        restart: always
+        restart: unless-stopped
 
-    plexpy:
-        image: linuxserver/plexpy
-        container_name: plexpy
-        volumes:
-            - /data_directory_path/config/plexpy:/config
-            - /etc/localtime:/etc/localtime:ro
-            - /data_directory_path/config/plex/Library/Application Support/Plex Media Server/Logs:/logs:ro
-        ports:
-            - 8181:8181
-        env_file: uidgid.env
-        environment:
-            - VIRTUAL_HOST=plexpy.HOSTNAME.com
-            - VIRTUAL_PORT=8181
-        restart: always
-
-    nzbhydra:
-        image: linuxserver/hydra
-        container_name: nzbhydra
-        volumes:
-            - /data_directory_path/config/nzbhydra:/config
-            - /data_directory_path/Downloads:/downloads
-            - /etc/localtime:/etc/localtime:ro
-        ports:
-            - 5075:5075
-        env_file: uidgid.env
-        environment:
-            - VIRTUAL_HOST=nzbhydra.HOSTNAME.com
-            - VIRTUAL_PORT=5075
-        restart: always
-
-    muximux:
-        image: linuxserver/muximux
-        container_name: muximux
-        volumes:
-            - /data_directory_path/config/muximux:/config
-            - /etc/localtime:/etc/localtime:ro
-        env_file: uidgid.env
-        environment:
-            - VIRTUAL_HOST=muximux.HOSTNAME.com
-        restart: always
-
+    # Radarr
     radarr:
         image: linuxserver/radarr
         container_name: radarr
+        privileged: true
+        depends_on:
+            - sabnzbd
+        env_file: 
+            - uidgid.env
+        network_mode: service:openvpn
         volumes:
-            - /data_directory_path/config/radarr:/config
-            - /data_directory_path/Movies:/movies
-            - /data_directory_path/Downloads/complete:/downloads
+            # Moved config to /root for performance
+            - /root/MediaRage/radarr:/config
+            - /root/MediaRage/radarr:/datadir
+            # Media Directories
+            - /mnt/data02/Anime:/Anime
+            - /mnt/data02/Movies:/Movies
+            - /mnt/data02/Private:/Private
+            # Source Directories
+            - /mnt/data02/Downloads:/Downloads
+            # Support files
+            - /root/MediaRage/radarr/logs:/var/log
+            - /var/run/docker.sock:/var/run/docker.sock
             - /etc/localtime:/etc/localtime:ro
-        ports:
-            - 7878:7878
-        env_file: uidgid.env
+        restart: unless-stopped
+    
+    # SabNZBD NZB Client
+    sabnzbd:
+        image: linuxserver/sabnzbd:${SABNZBD_TAG:-latest}
+        container_name: sabnzbd
+        privileged: true
+        depends_on:
+            - npm
+            - openvpn
+        env_file: 
+            - uidgid.env
         environment:
-            - VIRTUAL_HOST=radarr.HOSTNAME.com
-            - VIRTUAL_PORT=7878
-        restart: always
+            - VIRTUAL_HOST=sabnzbd.rdlg.net
+            - VIRTUAL_PORT=8080
+        network_mode: service:openvpn
+        volumes:
+            # On /root for performance, don't need to sync always to risk re-searching old files
+            #- /root/MediaRage/sabnzbd/history1.db:/datadir/admin/history1.db
+            #
+            # Moved config to /root for performance
+            - /root/MediaRage/sabnzbd:/config
+            - /root/MediaRage/sabnzbd:/datadir
+            #
+            - /mnt/data02/Downloads:/Downloads
+            # Support files
+            - /root/MediaRage/sabnzbd/logs:/var/log
+            - /var/run/docker.sock:/var/run/docker.sock
+            - /etc/localtime:/etc/localtime:ro
+        restart: unless-stopped
+
+    bazarr:
+        image: lscr.io/linuxserver/bazarr:latest
+        container_name: bazarr
+        env_file: 
+            - uidgid.env
+        network_mode: service:openvpn
+        depends_on:
+            - npm
+        #ports:
+        #    - 6767:6767
+        volumes:
+            - /root/MediaRage/bazarr/config:/config
+            - /mnt/data01/Television:/tv
+            - /mnt/data02/Movies:/movies
+            - /etc/localtime:/etc/localtime:ro
+        restart: unless-stopped
+
+    # Transmission Torrent Client
+    transmission:
+        image: linuxserver/transmission:latest
+        container_name: transmission
+        depends_on:
+            - npm
+        env_file: 
+            - uidgid.env
+        environment:
+            - blocklist-enabled=true
+            - blocklist-url="http://list.iblocklist.com/?list=uycdqbdfhtkdzocegzzu&fileformat=p2p&archiveformat=gz&username=Nomadadon&pin=555766"
+        network_mode: service:openvpn
+        volumes:
+            # Moved to /root for performance
+            - /root/MediaRage/transmission:/config
+            - /root/MediaRage/transmission/watch:/watch
+            # Source Directories
+            - /mnt/data02/Downloads:/Downloads
+            #
+            - /etc/localtime:/etc/localtime:ro
+        restart: unless-stopped
+
+    prowlarr:
+        image: lscr.io/linuxserver/prowlarr:latest
+        container_name: prowlarr
+        depends_on:
+            - npm
+        env_file: 
+            - uidgid.env
+        environment:
+            - VIRTUAL_HOST=prowlarr.rdlg.net
+            - VIRTUAL_PORT=9117
+        network_mode: service:openvpn
+        volumes:
+            - /root/MediaRage/Prowlarr:/config
+            - /etc/localtime:/etc/localtime:ro
+        #ports:
+        #  - 9696:9696
+        restart: unless-stopped
 
     ombi:
-        image: linuxserver/ombi
+        #image: lscr.io/linuxserver/ombi:latest
+        image: lscr.io/linuxserver/ombi:development
         container_name: ombi
+        network_mode: service:openvpn
+        env_file: 
+            - uidgid.env
         volumes:
-            - /data_directory_path/config/ombi:/config
+            - /root/MediaRage/ombi/config:/config
+            - /mnt/data01/Television:/tv
+            - /mnt/data02/Movies:/movies
             - /etc/localtime:/etc/localtime:ro
-        ports:
-            - 3579:3579
-        env_file: uidgid.env
-        environment:
-            - VIRTUAL_HOST=ombi.HOSTNAME.com
-            - VIRTUAL_PORT=3579
-        restart: always
+        restart: unless-stopped
 
-    nzbget:
-        image: linuxserver/nzbget
-        container_name: nzbget
-        volumes:
-            - /data_directory_path/config/nzbget:/config
-            - /data_directory_path/Downloads/complete:/complete
-            - /data_directory_path/Downloads:/downloads
-        ports:
-            - 6789:6789
-        env_file: uidgid.env
-        environment:
-            - VIRTUAL_HOST=nzbget.HOSTNAME.com
-            - VIRTUAL_PORT=6789
-        restart: always
+networks:
+  proxy:
+    external: false
+
