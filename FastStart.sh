@@ -10,6 +10,9 @@
 
 cd ~/MediaRage
 
+# Fix automount of Expeditor mount points
+sudo service autofs restart
+
 docker compose down
 
 docker compose up -d
