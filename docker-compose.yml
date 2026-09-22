@@ -52,6 +52,10 @@ services:
 #- 9696:9696
 # Bazarr
 #- 6767
+# Jellyfin
+#  - 8096:8096/tcp
+#  - 7359:7359/udp
+
 
     # Plex Media Server
     plex:
@@ -66,19 +70,19 @@ services:
         container_name: plex
         restart: unless-stopped
         ports:
-            - 1900:1900/udp
-            - 5353:5353/udp
+            #- 1900:1900/udp
+            #- 5353:5353/udp
             #- 6767:6767/tcp
-            - 8096:8096/tcp
-            - 7359:7359/udp
-            - 8324:8324/tcp
+            #- 8096:8096/tcp
+            #- 7359:7359/udp
+            #- 8324:8324/tcp
             - 32400:32400/tcp
-            - 32410:32410/udp
-            - 32412:32412/udp
-            - 32413:32413/udp
-            - 32414:32414/udp
-            - 32469:32469/tcp
-            - 33400:33400/udp
+            #- 32410:32410/udp
+            #- 32412:32412/udp
+            #- 32413:32413/udp
+            #- 32414:32414/udp
+            #- 32469:32469/tcp
+            #- 33400:33400/udp
         env_file: 
             - uidgid.env
         environment:
@@ -102,9 +106,9 @@ services:
         # Optional - specify the uid and gid you would like Jellyfin to use instead of root
         env_file: 
             - uidgid.env
-        #ports:
-        #  - 8096:8096/tcp
-        #  - 7359:7359/udp
+        ports:
+          - 8096:8096/tcp
+          - 7359:7359/udp
         volumes:
           - /root/MediaRage/Jellyfin/config:/config
           - /root/MediaRage/Jellyfin/cache:/cache
@@ -132,6 +136,12 @@ services:
         # Optional - alternative address used for autodiscovery
         environment:
           - JELLYFIN_PublishedServerUrl=http://jellyfin.rdlg.net
+        networks:
+            - proxy
+        devices:
+            - /dev/dri:/dev/dri #optional
+        tmpfs:
+            - /cache/transcode:rw,noexec,nosuid,size=4g
         # Optional - may be necessary for docker healthcheck to pass if running in host network mode
         extra_hosts:
           - 'host.docker.internal:host-gateway'
